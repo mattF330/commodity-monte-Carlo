@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Commodity War-Shock Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F3EFE6; --panel: #E8E2D3; --line: #C9BFA8; --ink: #1E1B16;
+    --ink-dim: #6B6252; --accent: #B8622E; --accent2: #4A6B5A; --danger: #9C3B32;
+    --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17140F; --panel: #211D16; --line: #3C362A; --ink: #EDE6D6;
+      --ink-dim: #9A9080; --accent: #D98A4A; --accent2: #6FA88F; --danger: #D9695C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17140F; --panel: #211D16; --line: #3C362A; --ink: #EDE6D6;
+    --ink-dim: #9A9080; --accent: #D98A4A; --accent2: #6FA88F; --danger: #D9695C;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  header { padding: 28px 24px 18px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
+  header p { margin: 6px 0 0; color: var(--ink-dim); font-size: 0.92rem; max-width: 62ch; line-height: 1.5; }
+  main {
+    display: grid; grid-template-columns: 300px 1fr; gap: 0;
+    max-width: 1180px; margin: 0 auto;
+  }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .panel { padding: 22px 24px; border-right: 1px solid var(--line); }
+  @media (max-width: 860px) { .panel { border-right: none; border-bottom: 1px solid var(--line); } }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: flex; justify-content: space-between; font-size: 0.78rem;
+    color: var(--ink-dim); margin-bottom: 5px;
+  }
+  .field label span.val { font-family: var(--mono); color: var(--ink); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); height: 4px; background: var(--line); }
+  input[type="range"]:disabled { opacity: 0.4; }
+  .group-title {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-dim); margin: 22px 0 10px; border-top: 1px solid var(--line); padding-top: 16px;
+  }
+  .group-title:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+  button { font-family: var(--sans); cursor: pointer; border-radius: 3px; font-weight: 600; }
+  button#run {
+    width: 100%; margin-top: 20px; padding: 12px; border: none;
+    background: var(--accent); color: #17140F; font-size: 0.9rem;
+  }
+  button#run:active { transform: translateY(1px); }
+  #agent-panel { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; margin-bottom: 18px; }
+  #agent-panel .md-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); }
+  #agent-price-row { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 2px; flex-wrap: wrap; }
+  #agent-price { font-family: var(--mono); font-size: 1.3rem; }
+  #agent-change { font-family: var(--mono); font-size: 0.85rem; }
+  #agent-change[data-dir="up"] { color: var(--accent2); }
+  #agent-change[data-dir="down"] { color: var(--danger); }
+  #agent-meta { font-size: 0.72rem; color: var(--ink-dim); }
+  #agent-meta[data-shock="1"] { color: var(--danger); }
+  .agent-controls { display: flex; gap: 8px; margin-top: 10px; }
+  .agent-controls button {
+    flex: 1; padding: 6px 8px; font-size: 0.76rem; border: 1px solid var(--line);
+    background: transparent; color: var(--ink);
+  }
+  .agent-controls button.active { background: var(--accent2); color: #17140F; border-color: var(--accent2); }
+  .output { padding: 22px 24px; overflow-x: auto; }
+  .chart-block { margin-bottom: 26px; }
+  .chart-block h2 { font-size: 0.9rem; font-weight: 600; margin: 0 0 4px; }
+  .chart-block .sub { font-size: 0.78rem; color: var(--ink-dim); margin: 0 0 10px; }
+  canvas { display: block; width: 100%; background: var(--panel); border-radius: 4px; border: 1px solid var(--line); }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  }
+  .stat { background: var(--panel); padding: 12px 14px; }
+  .stat .k { font-size: 0.7rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat .v { font-family: var(--mono); font-size: 1.05rem; margin-top: 3px; }
+  .legend { display: flex; gap: 16px; font-size: 0.76rem; color: var(--ink-dim); margin-top: 8px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 2px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Commodity War-Shock Simulator</h1>
+  <p>Monte Carlo price paths for a commodity subject to ordinary market volatility plus random supply-shock jumps from foreign conflict. A local agent can continuously tick the price forward using this same model — no external data source, everything runs in your browser.</p>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="group-title">Live agent</div>
+    <div id="agent-panel">
+      <span class="md-label">Self-ticking price (no external API)</span>
+      <div id="agent-price-row">
+        <span id="agent-price">$75.00</span>
+        <span id="agent-change" data-dir="none"></span>
+      </div>
+      <div id="agent-meta">Paused · using sliders below</div>
+      <div class="agent-controls">
+        <button id="agent-toggle">Start agent</button>
+        <button id="agent-reset">Reset</button>
+      </div>
+    </div>
+
+    <div class="group-title">Market baseline</div>
+    <div class="field"><label>Starting price <span class="val" id="v-price">75</span></label>
+      <input type="range" id="price" min="10" max="300" value="75" step="1"></div>
+    <div class="field"><label>Horizon (trading days) <span class="val" id="v-days">252</span></label>
+      <input type="range" id="days" min="30" max="504" value="252" step="1"></div>
+    <div class="field"><label>Annual drift <span class="val" id="v-drift">2%</span></label>
+      <input type="range" id="drift" min="-20" max="20" value="2" step="1"></div>
+    <div class="field"><label>Annual volatility <span class="val" id="v-vol">30%</span></label>
+      <input type="range" id="vol" min="5" max="90" value="30" step="1"></div>
+
+    <div class="group-title">War-shock process</div>
+    <div class="field"><label>Shock chance per day <span class="val" id="v-lambda">0.5%</span></label>
+      <input type="range" id="lambda" min="0" max="5" value="0.5" step="0.1"></div>
+    <div class="field"><label>Avg shock size <span class="val" id="v-jmean">+8%</span></label>
+      <input type="range" id="jmean" min="-30" max="30" value="8" step="1"></div>
+    <div class="field"><label>Shock size spread <span class="val" id="v-jstd">6%</span></label>
+      <input type="range" id="jstd" min="1" max="25" value="6" step="1"></div>
+
+    <div class="group-title">Simulation</div>
+    <div class="field"><label>Number of simulations <span class="val" id="v-nsim">2000</span></label>
+      <input type="range" id="nsim" min="200" max="5000" value="2000" step="100"></div>
+
+    <button id="run">Run simulation</button>
+  </div>
+
+  <div class="output">
+    <div class="chart-block">
+      <h2>Sample price paths</h2>
+      <p class="sub">A random subset of simulated paths, projected forward from the current price. Dots mark days a war shock hit.</p>
+      <canvas id="pathsCanvas" height="300"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--accent2)"></span>simulated paths</span>
+        <span><span class="swatch" style="background:var(--accent)"></span>mean path</span>
+        <span><span class="swatch" style="background:var(--danger)"></span>shock event</span>
+      </div>
+    </div>
+    <div class="chart-block">
+      <h2>Distribution of ending prices</h2>
+      <p class="sub" id="histSub">Across all simulations.</p>
+      <canvas id="histCanvas" height="180"></canvas>
+    </div>
+    <div class="chart-block">
+      <h2>Summary</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+function randn() {
+  let u = 1 - Math.random(), v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function simulate(p) {
+  const dt = 1/252;
+  const driftDaily = (p.mu - 0.5*p.sigma*p.sigma) * dt;
+  const volDaily = p.sigma * Math.sqrt(dt);
+  const finals = new Float64Array(p.nsim);
+  const showN = Math.min(50, p.nsim);
+  const shownPaths = [];
+  const meanPath = new Float64Array(p.days + 1);
+
+  for (let s = 0; s < p.nsim; s++) {
+    let price = p.price0;
+    const track = s < showN;
+    const path = track ? [price] : null;
+    const shockDays = track ? [] : null;
+    meanPath[0] += price;
+    for (let d = 1; d <= p.days; d++) {
+      price *= Math.exp(driftDaily + volDaily * randn());
+      if (Math.random() < p.lambda) {
+        const shockPct = (p.jmean + p.jstd * randn()) / 100;
+        price *= (1 + shockPct);
+        if (track) shockDays.push(d);
+      }
+      price = Math.max(price, 0.01);
+      if (track) path.push(price);
+      meanPath[d] += price;
+    }
+    finals[s] = price;
+    if (track) shownPaths.push({ path, shockDays });
+  }
+  for (let d = 0; d <= p.days; d++) meanPath[d] /= p.nsim;
+  return { finals, shownPaths, meanPath };
+}
+
+const PM = { marginL: 46, marginB: 22, marginT: 10, marginR: 10 };
+function dayFromX(xPix, canvasW, days) {
+  const plotW = canvasW - PM.marginL - PM.marginR;
+  const frac = (xPix - PM.marginL) / plotW;
+  return Math.max(0, Math.min(days, Math.round(frac * days)));
+}
+
+function drawPaths(canvas, result, days, price0, hoverDay) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight || 300;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  let min = price0, max = price0;
+  result.shownPaths.forEach(sp => sp.path.forEach(v => { if (v < min) min = v; if (v > max) max = v; }));
+  result.meanPath.forEach(v => { if (v < min) min = v; if (v > max) max = v; });
+  const pad = (max - min) * 0.08 || 1;
+  min -= pad; max += pad;
+
+  const marginL = PM.marginL, marginB = PM.marginB, marginT = PM.marginT, marginR = PM.marginR;
+  const plotW = w - marginL - marginR, plotH = h - marginT - marginB;
+  const x = i => marginL + (i / days) * plotW;
+  const y = v => marginT + plotH - ((v - min) / (max - min)) * plotH;
+
+  const style = getComputedStyle(document.documentElement);
+  const lineColor = style.getPropertyValue('--line').trim();
+  const inkDim = style.getPropertyValue('--ink-dim').trim();
+  const accent2 = style.getPropertyValue('--accent2').trim();
+  const accent = style.getPropertyValue('--accent').trim();
+  const danger = style.getPropertyValue('--danger').trim();
+
+  ctx.strokeStyle = lineColor; ctx.lineWidth = 1; ctx.font = '10px IBM Plex Mono, monospace';
+  ctx.fillStyle = inkDim;
+  for (let i = 0; i <= 4; i++) {
+    const v = min + (max - min) * (i / 4);
+    const yy = y(v);
+    ctx.beginPath(); ctx.moveTo(marginL, yy); ctx.lineTo(w - marginR, yy); ctx.stroke();
+    ctx.fillText(v.toFixed(0), 4, yy + 3);
+  }
+
+  ctx.globalAlpha = 0.5;
+  result.shownPaths.forEach(sp => {
+    ctx.strokeStyle = accent2; ctx.lineWidth = 1;
+    ctx.beginPath();
+    sp.path.forEach((v, i) => i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)));
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+  result.shownPaths.forEach(sp => {
+    ctx.fillStyle = danger;
+    sp.shockDays.forEach(d => {
+      ctx.beginPath(); ctx.arc(x(d), y(sp.path[d]), 2.2, 0, Math.PI * 2); ctx.fill();
+    });
+  });
+
+  ctx.strokeStyle = accent; ctx.lineWidth = 2;
+  ctx.beginPath();
+  result.meanPath.forEach((v, i) => i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)));
+  ctx.stroke();
+
+  if (hoverDay !== null && hoverDay !== undefined) {
+    const dayVals = result.shownPaths.map(sp => sp.path[hoverDay]).filter(v => v !== undefined);
+    const dMin = dayVals.length ? Math.min(...dayVals) : result.meanPath[hoverDay];
+    const dMax = dayVals.length ? Math.max(...dayVals) : result.meanPath[hoverDay];
+    const dMean = result.meanPath[hoverDay];
+
+    ctx.strokeStyle = inkDim; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x(hoverDay), marginT); ctx.lineTo(x(hoverDay), marginT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.arc(x(hoverDay), y(dMean), 3, 0, Math.PI * 2); ctx.fill();
+
+    const lines = [`Day ${hoverDay}`, `Mean: ${dMean.toFixed(2)}`, `Range: ${dMin.toFixed(2)}–${dMax.toFixed(2)}`];
+    ctx.font = '11px IBM Plex Mono, monospace';
+    const boxW = Math.max(...lines.map(l => ctx.measureText(l).width)) + 16;
+    const boxH = lines.length * 15 + 10;
+    let boxX = x(hoverDay) + 10;
+    if (boxX + boxW > w - marginR) boxX = x(hoverDay) - boxW - 10;
+    const boxY = marginT + 4;
+    ctx.fillStyle = style.getPropertyValue('--panel').trim();
+    ctx.strokeStyle = lineColor;
+    ctx.fillRect(boxX, boxY, boxW, boxH); ctx.strokeRect(boxX, boxY, boxW, boxH);
+    ctx.fillStyle = style.getPropertyValue('--ink').trim();
+    lines.forEach((l, i) => ctx.fillText(l, boxX + 8, boxY + 16 + i * 15));
+  }
+}
+
+function drawHist(canvas, finals, price0) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight || 180;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  const min = Math.min(...finals), max = Math.max(...finals);
+  const bins = 28;
+  const counts = new Array(bins).fill(0);
+  const binW = (max - min) / bins || 1;
+  finals.forEach(v => {
+    let idx = Math.floor((v - min) / binW);
+    if (idx >= bins) idx = bins - 1; if (idx < 0) idx = 0;
+    counts[idx]++;
+  });
+  const maxCount = Math.max(...counts);
+
+  const marginL = 46, marginB = 20, marginT = 8, marginR = 10;
+  const plotW = w - marginL - marginR, plotH = h - marginT - marginB;
+  const style = getComputedStyle(document.documentElement);
+  const accent2 = style.getPropertyValue('--accent2').trim();
+  const accent = style.getPropertyValue('--accent').trim();
+  const inkDim = style.getPropertyValue('--ink-dim').trim();
+
+  ctx.font = '10px IBM Plex Mono, monospace'; ctx.fillStyle = inkDim;
+  const barW = plotW / bins;
+  counts.forEach((c, i) => {
+    const bh = (c / maxCount) * plotH;
+    const binMid = min + (i + 0.5) * binW;
+    ctx.fillStyle = binMid >= price0 ? accent2 : accent;
+    ctx.fillRect(marginL + i * barW + 1, marginT + plotH - bh, barW - 2, bh);
+  });
+  ctx.fillStyle = inkDim;
+  ctx.fillText(min.toFixed(0), marginL, h - 4);
+  ctx.fillText(max.toFixed(0), w - marginR - 24, h - 4);
+}
+
+function percentile(sorted, p) {
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function renderStats(finals, price0) {
+  const sorted = Array.from(finals).sort((a, b) => a - b);
+  const mean = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+  const median = percentile(sorted, 0.5);
+  const p5 = percentile(sorted, 0.05);
+  const p95 = percentile(sorted, 0.95);
+  const gainProb = sorted.filter(v => v > price0).length / sorted.length;
+  const items = [
+    ['Mean', mean], ['Median', median],
+    ['5th pct (downside)', p5], ['95th pct (upside)', p95],
+    ['P(price up)', (gainProb * 100).toFixed(1) + '%'],
+  ];
+  document.getElementById('stats').innerHTML = items.map(([k, v]) =>
+    `<div class="stat"><div class="k">${k}</div><div class="v">${typeof v === 'number' ? v.toFixed(2) : v}</div></div>`
+  ).join('');
+}
+
+// --- Local live-price agent — no external API of any kind -------------
+// Advances the price using the exact same jump-diffusion model as the
+// Monte Carlo engine, one small simulated time-step at a time, and
+// periodically re-runs the forward projection from wherever it's landed.
+const TICKS_PER_DAY = 24;   // one tick ≈ one simulated trading hour
+const TICK_MS = 600;        // real-world ms between ticks
+const RESIM_EVERY_N_TICKS = 4;
+
+const priceSlider = document.getElementById('price');
+const agentPriceEl = document.getElementById('agent-price');
+const agentChangeEl = document.getElementById('agent-change');
+const agentMetaEl = document.getElementById('agent-meta');
+const agentToggleBtn = document.getElementById('agent-toggle');
+const agentResetBtn = document.getElementById('agent-reset');
+
+let livePrice = +priceSlider.value;
+let agentBaseline = livePrice;
+let elapsedDays = 0;
+let tickCount = 0;
+let agentTimer = null;
+
+function updateAgentDisplay(shocked) {
+  agentPriceEl.textContent = `$${livePrice.toFixed(2)}`;
+  const pct = ((livePrice - agentBaseline) / agentBaseline) * 100;
+  agentChangeEl.dataset.dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'none';
+  agentChangeEl.textContent = `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%`;
+  agentMetaEl.dataset.shock = shocked ? '1' : '0';
+  agentMetaEl.textContent = agentTimer
+    ? `🟢 Live · day ${elapsedDays.toFixed(1)}${shocked ? ' · ⚡ war shock!' : ''}`
+    : 'Paused · using sliders below';
+}
+
+function agentTick() {
+  const sigma = +document.getElementById('vol').value / 100;
+  const mu = +document.getElementById('drift').value / 100;
+  const lambdaDaily = +document.getElementById('lambda').value / 100;
+  const jmean = +document.getElementById('jmean').value;
+  const jstd = +document.getElementById('jstd').value;
+  const dt = 1 / (252 * TICKS_PER_DAY);
+
+  livePrice *= Math.exp((mu - 0.5 * sigma * sigma) * dt + sigma * Math.sqrt(dt) * randn());
+  let shocked = false;
+  if (Math.random() < lambdaDaily / TICKS_PER_DAY) {
+    livePrice *= (1 + (jmean + jstd * randn()) / 100);
+    shocked = true;
+  }
+  livePrice = Math.max(livePrice, 0.01);
+  elapsedDays += 1 / TICKS_PER_DAY;
+  tickCount++;
+  updateAgentDisplay(shocked);
+  if (tickCount % RESIM_EVERY_N_TICKS === 0) run();
+}
+
+agentToggleBtn.addEventListener('click', () => {
+  if (agentTimer) {
+    clearInterval(agentTimer);
+    agentTimer = null;
+    priceSlider.disabled = false;
+    agentToggleBtn.textContent = 'Start agent';
+    agentToggleBtn.classList.remove('active');
+    updateAgentDisplay(false);
+  } else {
+    agentBaseline = livePrice;
+    elapsedDays = 0;
+    priceSlider.disabled = true;
+    agentToggleBtn.textContent = 'Pause agent';
+    agentToggleBtn.classList.add('active');
+    agentTimer = setInterval(agentTick, TICK_MS);
+    updateAgentDisplay(false);
+  }
+});
+
+agentResetBtn.addEventListener('click', () => {
+  if (agentTimer) { clearInterval(agentTimer); agentTimer = null; }
+  priceSlider.disabled = false;
+  agentToggleBtn.textContent = 'Start agent';
+  agentToggleBtn.classList.remove('active');
+  livePrice = +priceSlider.value;
+  agentBaseline = livePrice;
+  elapsedDays = 0;
+  tickCount = 0;
+  updateAgentDisplay(false);
+  run();
+});
+
+priceSlider.addEventListener('input', () => {
+  if (!agentTimer) livePrice = +priceSlider.value;
+});
+
+const ids = ['price','days','drift','vol','lambda','jmean','jstd','nsim'];
+const fmt = { price: v => v, days: v => v, drift: v => v+'%', vol: v => v+'%',
+  lambda: v => v+'%', jmean: v => (v>=0?'+':'')+v+'%', jstd: v => v+'%', nsim: v => v };
+
+let currentResult = null, currentParams = null, debounceTimer = null;
+
+ids.forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    document.getElementById('v-'+id).textContent = fmt[id](el.value);
+    if (id === 'price' && !agentTimer) updateAgentDisplay(false);
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(run, 120);
+  });
+});
+
+function run() {
+  const params = {
+    price0: livePrice,
+    days: +document.getElementById('days').value,
+    mu: +document.getElementById('drift').value / 100,
+    sigma: +document.getElementById('vol').value / 100,
+    lambda: +document.getElementById('lambda').value / 100,
+    jmean: +document.getElementById('jmean').value,
+    jstd: +document.getElementById('jstd').value,
+    nsim: +document.getElementById('nsim').value,
+  };
+  currentResult = simulate(params);
+  currentParams = params;
+  drawPaths(document.getElementById('pathsCanvas'), currentResult, params.days, params.price0, null);
+  drawHist(document.getElementById('histCanvas'), currentResult.finals, params.price0);
+  renderStats(currentResult.finals, params.price0);
+  document.getElementById('histSub').textContent =
+    `${params.nsim.toLocaleString()} simulations over ${params.days} trading days. Hover the path chart to track a specific day.`;
+}
+
+const pathsCanvas = document.getElementById('pathsCanvas');
+function handleHover(clientX) {
+  if (!currentResult) return;
+  const rect = pathsCanvas.getBoundingClientRect();
+  const day = dayFromX(clientX - rect.left, pathsCanvas.clientWidth, currentParams.days);
+  drawPaths(pathsCanvas, currentResult, currentParams.days, currentParams.price0, day);
+}
+pathsCanvas.addEventListener('mousemove', e => handleHover(e.clientX));
+pathsCanvas.addEventListener('mouseleave', () => {
+  if (currentResult) drawPaths(pathsCanvas, currentResult, currentParams.days, currentParams.price0, null);
+});
+pathsCanvas.addEventListener('touchmove', e => { handleHover(e.touches[0].clientX); e.preventDefault(); }, { passive: false });
+
+document.getElementById('run').addEventListener('click', run);
+window.addEventListener('resize', run);
+updateAgentDisplay(false);
+run();
+</script>
+</body>
+</html>
